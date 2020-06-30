@@ -98,6 +98,9 @@ func New(cliCtx *cli.Context) error {
 
 // Check if a user has an existing wallet at the specified path.
 func hasWalletDir(walletPath string) (bool, error) {
+	if _, err := os.Stat(walletPath); os.IsNotExist(err) {
+		return false, nil
+	}
 	f, err := os.Open(walletPath)
 	if err != nil {
 		return false, err
@@ -145,7 +148,7 @@ func inputWalletType(_ *cli.Context) WalletType {
 	return WalletType(selection)
 }
 
-func inputAccountPassword(_ *cli.Context) string {
+func inputAccountPassword(cliCtx *cli.Context) string {
 	prompt := promptui.Prompt{
 		Label:    "Strong password",
 		Validate: validatePasswordInput,
@@ -166,7 +169,8 @@ func inputAccountPassword(_ *cli.Context) string {
 		log.Fatalf("Could not read password confirmation: %v", formatPromptError(err))
 	}
 	if walletPassword != confirmPassword {
-		log.Fatal("Passwords do not match")
+		log.Error("Passwords do not match")
+		return inputAccountPassword(cliCtx)
 	}
 	return walletPassword
 }
