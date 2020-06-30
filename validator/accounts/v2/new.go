@@ -34,8 +34,8 @@ var walletTypeSelections = map[WalletType]string{
 	remoteWallet:  "Remote Accounts (Advanced)",
 }
 
-// New --
-func New(cliCtx *cli.Context) error {
+// NewWallet --
+func NewWallet(cliCtx *cli.Context) error {
 	// Read a wallet path and the desired type of wallet for a user
 	// (e.g.: Direct, Keystore, Derived).
 	walletPath := inputWalletPath(cliCtx)

@@ -122,4 +122,9 @@ var (
 		Usage: "Path to a directory on-disk where wallet passwords are stored",
 		Value: cmd.DefaultDataDir() + "/.prysm-wallet/.passwords",
 	}
+	// WithdrawalMnemonicFlag --
+	WithdrawalMnemonicFlag = &cli.StringFlag{
+		Name:  "withdrawal-mnemonic",
+		Usage: "Withdrawal mnemonic to be used for creating the deposit data",
+	}
 )

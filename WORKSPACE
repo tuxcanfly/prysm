@@ -368,3 +368,10 @@ go_repository(
     sum = "h1:3l11YT8tm9MnwGFQ4kETwkzpAwY2Jt9lCrumCUW4+z4=",
     version = "v0.7.0",
 )
+
+go_repository(
+    name = "com_github_brianium_mnemonic",
+    importpath = "github.com/brianium/mnemonic",
+    sum = "h1:futFTqrUAf1IanFLU+jK4D1NpgE/+gCbnCG7Fl0rHs0=",
+    version = "v0.0.0-20180124190051-72af92c51f88",
+)

@@ -8,6 +8,7 @@ require (
 	github.com/aristanetworks/goarista v0.0.0-20200521140103-6c3304613b30
 	github.com/bazelbuild/buildtools v0.0.0-20200528175155-f4e8394f069d
 	github.com/bazelbuild/rules_go v0.23.2
+	github.com/brianium/mnemonic v0.0.0-20180124190051-72af92c51f88 // indirect
 	github.com/btcsuite/btcd v0.20.1-beta
 	github.com/cespare/cp v1.1.1 // indirect
 	github.com/cloudflare/roughtime v0.0.0-20200205191924-a69ef1dab727
@@ -101,7 +102,7 @@ require (
 	go.etcd.io/bbolt v1.3.4
 	go.opencensus.io v0.22.3
 	go.uber.org/automaxprocs v1.3.0
-	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37
+	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	golang.org/x/exp v0.0.0-20200513190911-00229845015e
 	golang.org/x/net v0.0.0-20200528225125-3c3fba18258b // indirect
 	golang.org/x/sys v0.0.0-20200523222454-059865788121 // indirect
