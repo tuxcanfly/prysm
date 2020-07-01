@@ -1,8 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_test")
 load("@prysm//tools/go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
     srcs = ["iface.go"],
     importpath = "github.com/prysmaticlabs/prysm/validator/keymanager/v2",
-    visibility = ["//visibility:public"],
+    visibility = [
+        "//validator:__pkg__",
+        "//validator:__subpackages__",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["iface_test.go"],
+    embed = [":go_default_library"],
+    deps = ["//validator/keymanager/v2/direct:go_default_library"],
 )

@@ -17,13 +17,13 @@ var Commands = &cli.Command{
 			Description: `creates a new validator account for eth2. creates a new wallet for a user based on
 specified input, capable of creating a direct, derived, or remote wallet.
 this command outputs a deposit data string which can be used to deposit Ether into the ETH1.0 deposit
-contract in order to create a validator account`,
+contract in order to activate the validator client`,
 			Flags: append(featureconfig.ActiveFlags(featureconfig.ValidatorFlags),
 				[]cli.Flag{
 					flags.WalletDirFlag,
 					flags.WalletPasswordsDirFlag,
 				}...),
-			Action: NewWallet,
+			Action: New,
 		},
 		{
 			Name:        "recover",
