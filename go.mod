@@ -78,6 +78,7 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/peterh/liner v1.2.0 // indirect
 	github.com/pkg/errors v0.9.1
+    github.com/supranational/blst v0.1.0
 	github.com/prestonvanloon/go-recaptcha v0.0.0-20190217191114-0834cef6e8bd
 	github.com/prometheus/client_golang v1.6.0
 	github.com/prometheus/tsdb v0.10.0 // indirect

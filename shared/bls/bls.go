@@ -4,41 +4,42 @@
 package bls
 
 import (
-	"github.com/prysmaticlabs/prysm/shared/bls/herumi"
 	"github.com/prysmaticlabs/prysm/shared/bls/iface"
+	sa "github.com/prysmaticlabs/prysm/shared/bls/supranational"
 )
 
 // SecretKeyFromBytes creates a BLS private key from a BigEndian byte slice.
 func SecretKeyFromBytes(privKey []byte) (SecretKey, error) {
-	return herumi.SecretKeyFromBytes(privKey)
+	return sa.SecretKeyFromBytes(privKey)
 }
 
 // PublicKeyFromBytes creates a BLS public key from a  BigEndian byte slice.
 func PublicKeyFromBytes(pubKey []byte) (PublicKey, error) {
-	return herumi.PublicKeyFromBytes(pubKey)
+	return sa.PublicKeyFromBytes(pubKey)
 }
 
 // SignatureFromBytes creates a BLS signature from a LittleEndian byte slice.
 func SignatureFromBytes(sig []byte) (Signature, error) {
-	return herumi.SignatureFromBytes(sig)
+	return sa.SignatureFromBytes(sig)
 }
 
 // AggregateSignatures converts a list of signatures into a single, aggregated sig.
 func AggregateSignatures(sigs []iface.Signature) iface.Signature {
-	return herumi.AggregateSignatures(sigs)
+	return sa.AggregateSignatures(sigs)
 }
 
 // VerifyMultipleSignatures verifies multiple signatures for distinct messages securely.
 func VerifyMultipleSignatures(sigs []iface.Signature, msgs [][32]byte, pubKeys []iface.PublicKey) (bool, error) {
-	return herumi.VerifyMultipleSignatures(sigs, msgs, pubKeys)
+	ag := AggregateSignatures(sigs)
+	return ag.AggregateVerify(pubKeys, msgs), nil
 }
 
 // NewAggregateSignature creates a blank aggregate signature.
 func NewAggregateSignature() iface.Signature {
-	return herumi.NewAggregateSignature()
+	return sa.NewAggregateSignature()
 }
 
 // RandKey creates a new private key using a random input.
 func RandKey() iface.SecretKey {
-	return herumi.RandKey()
+	return sa.RandKey()
 }

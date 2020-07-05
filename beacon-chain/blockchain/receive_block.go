@@ -207,9 +207,6 @@ func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []*ethpb.SignedB
 			"deposits":     len(blockCopy.Block.Body.Deposits),
 		}).Debug("Finished applying state transition")
 
-		s.epochParticipationLock.Lock()
-		s.epochParticipation[helpers.SlotToEpoch(blockCopy.Block.Slot)] = precompute.Balances
-		s.epochParticipationLock.Unlock()
 	}
 	lastBlk := blocks[len(blocks)-1]
 	lastRoot := blkRoots[len(blkRoots)-1]
