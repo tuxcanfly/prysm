@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gogo/protobuf/types"
 	"time"
 
 	ethpb "github.com/prysmaticlabs/ethereumapis/eth/v1alpha1"
@@ -21,6 +22,8 @@ import (
 	keymanager "github.com/prysmaticlabs/prysm/validator/keymanager/v1"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // SubmitAttestation completes the validator client's attester responsibility at a given slot.
@@ -58,6 +61,26 @@ func (v *validator) SubmitAttestation(ctx context.Context, slot uint64, pubKey [
 		log.WithError(err).Error("Could not request attestation to sign at slot")
 		if v.emitAccountMetrics {
 			ValidatorAttestFailVec.WithLabelValues(fmtKey).Inc()
+		}
+		if s, ok := status.FromError(err); ok {
+			// In the case of an invalid argument, this could be because the validator has an
+			// incorrect genesis time. So we can perform a quick check
+			if s.Code() == codes.InvalidArgument {
+				log.Warn("Asking beacon node for genesis timestamp")
+
+				g, err := v.node.GetGenesis(ctx, &types.Empty{})
+				if err != nil {
+					log.WithError(err).Error("Failed to update genesis time")
+					return
+				}
+				if uint64(g.GenesisTime.Seconds) != v.genesisTime {
+					previous := v.genesisTime
+					v.genesisTime = uint64(g.GenesisTime.Seconds)
+					log.WithField("genesisTime", time.Unix(g.GenesisTime.Seconds, 0)).WithField(
+						"previousGenesisTime", time.Unix(int64(previous), 0),
+					).Warn("Updated genesis time")
+				}
+			}
 		}
 		return
 	}
