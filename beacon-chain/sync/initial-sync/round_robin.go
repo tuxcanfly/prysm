@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/paulbellamy/ratecounter"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	eth "github.com/prysmaticlabs/ethereumapis/eth/v1alpha1"
 	"github.com/prysmaticlabs/prysm/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/beacon-chain/core/state"
@@ -31,6 +33,13 @@ const (
 type blockReceiverFn func(ctx context.Context, block *eth.SignedBeaconBlock, blockRoot [32]byte) error
 
 type batchBlockReceiverFn func(ctx context.Context, blks []*eth.SignedBeaconBlock, roots [][32]byte) error
+
+var bpsCount = promauto.NewGauge(
+	prometheus.GaugeOpts{
+		Name: "bps",
+		Help: "How fast can you go",
+	},
+)
 
 // Round Robin sync looks at the latest peer statuses and syncs with the highest
 // finalized peer.
@@ -171,6 +180,7 @@ func (s *Service) logSyncStatus(genesis time.Time, blk *eth.BeaconBlock, blkRoot
 			fmt.Sprintf("0x%s...", hex.EncodeToString(blkRoot[:])[:8]),
 			blk.Slot, helpers.SlotsSince(genesis), timeRemaining,
 		)
+		bpsCount.Set(float64(rate))
 	}
 }
 
