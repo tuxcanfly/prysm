@@ -33,7 +33,7 @@ func TestSecretKeyFromBytes(t *testing.T) {
 	}{
 		{
 			name: "Nil",
-			err:  errors.New("secret key must be 32 bytes"),
+			err:  errors.New("1 key must be 32 bytes"),
 		},
 		{
 			name:  "Empty",
