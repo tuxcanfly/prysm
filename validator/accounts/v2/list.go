@@ -156,16 +156,11 @@ func listDerivedKeymanagerAccounts(
 		return errors.Wrap(err, "could not fetch validating public keys")
 	}
 	nextAccountNumber := keymanager.NextAccountNumber(ctx)
-	currentAccountNumber := nextAccountNumber
-	if nextAccountNumber > 0 {
-		currentAccountNumber--
-	}
 	accountNames, err := keymanager.AccountNames(ctx)
 	if err != nil {
 		return err
 	}
-	log.Info(currentAccountNumber)
-	for i := uint64(0); i <= currentAccountNumber; i++ {
+	for i := uint64(0); i < nextAccountNumber; i++ {
 		fmt.Println("")
 		validatingKeyPath := fmt.Sprintf(derived.ValidatingKeyDerivationPathTemplate, i)
 		withdrawalKeyPath := fmt.Sprintf(derived.WithdrawalKeyDerivationPathTemplate, i)
