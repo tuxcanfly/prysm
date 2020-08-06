@@ -1,6 +1,9 @@
 package kv
 
 import (
+	"encoding/hex"
+	"fmt"
+
 	"github.com/pkg/errors"
 	ethpb "github.com/prysmaticlabs/ethereumapis/eth/v1alpha1"
 	"github.com/prysmaticlabs/prysm/beacon-chain/core/helpers"
@@ -15,8 +18,9 @@ import (
 // the deletion of unaggregated attestations in the pool.
 func (p *AttCaches) AggregateUnaggregatedAttestations() error {
 	unaggregatedAtts := p.UnaggregatedAttestations()
-	attsByDataRoot := make(map[[32]byte][]*ethpb.Attestation, len(unaggregatedAtts))
-	for _, att := range unaggregatedAtts {
+	alreadyAggregatedAtts := p.AggregatedAttestations()
+	attsByDataRoot := make(map[[32]byte][]*ethpb.Attestation, len(unaggregatedAtts)+len(alreadyAggregatedAtts))
+	for _, att := range append(unaggregatedAtts, alreadyAggregatedAtts...) {
 		attDataRoot, err := stateutil.AttestationDataRoot(att.Data)
 		if err != nil {
 			return err
@@ -74,6 +78,14 @@ func (p *AttCaches) SaveAggregatedAttestation(att *ethpb.Attestation) error {
 	if !helpers.IsAggregated(att) {
 		return errors.New("attestation is not aggregated")
 	}
+	has, err := p.HasAggregatedAttestation(att)
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
+
 	r, err := hashFn(att.Data)
 	if err != nil {
 		return errors.Wrap(err, "could not tree hash attestation")
@@ -157,6 +169,7 @@ func (p *AttCaches) DeleteAggregatedAttestation(att *ethpb.Attestation) error {
 	if !ok {
 		return nil
 	}
+	before := len(attList)
 
 	filtered := make([]*ethpb.Attestation, 0)
 	for _, a := range attList {
@@ -166,8 +179,10 @@ func (p *AttCaches) DeleteAggregatedAttestation(att *ethpb.Attestation) error {
 	}
 	if len(filtered) == 0 {
 		delete(p.aggregatedAtt, r)
+		fmt.Println("deleting ", hex.EncodeToString(r[:]))
 	} else {
 		p.aggregatedAtt[r] = filtered
+		fmt.Println("before ", before, " after ", len(p.aggregatedAtt[r]), hex.EncodeToString(r[:]), p.aggregatedAtt[r][0].AggregationBits.Count())
 	}
 
 	return nil

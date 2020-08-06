@@ -15,6 +15,13 @@ func (p *AttCaches) SaveUnaggregatedAttestation(att *ethpb.Attestation) error {
 	if helpers.IsAggregated(att) {
 		return errors.New("attestation is aggregated")
 	}
+	has, err := p.HasAggregatedAttestation(att)
+	if err != nil {
+		return err
+	}
+	if has {
+		return nil
+	}
 
 	r, err := hashFn(att)
 	if err != nil {
