@@ -23,7 +23,7 @@ deserialize to input objects.
 _Example: Block header input data_
 
 ```go
-type InputBlockWithPrestate struct {
+type InputBlockHeader struct {
 	StateID uint16
 	Block   *ethpb.BeaconBlock
 }

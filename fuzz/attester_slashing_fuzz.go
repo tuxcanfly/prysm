@@ -4,16 +4,16 @@ import (
 	"context"
 
 	ethpb "github.com/prysmaticlabs/ethereumapis/eth/v1alpha1"
-	"github.com/prysmaticlabs/prysm/beacon-chain/core/state"
+	"github.com/prysmaticlabs/prysm/beacon-chain/core/blocks"
 	stateTrie "github.com/prysmaticlabs/prysm/beacon-chain/state"
 	prylabs_testing "github.com/prysmaticlabs/prysm/fuzz/testing"
 	"github.com/prysmaticlabs/prysm/shared/params"
 )
 
-// BeaconFuzzBlock using the corpora from sigp/beacon-fuzz.
-func BeaconFuzzBlock(b []byte) ([]byte, bool) {
+// BeaconFuzzAttesterSlashing implements libfuzzer and beacon fuzz interface.
+func BeaconFuzzAttesterSlashing(b []byte) ([]byte, bool) {
 	params.UseMainnetConfig()
-	input := &InputBlockHeader{}
+	input := &InputAttesterSlashingWrapper{}
 	if err := input.UnmarshalSSZ(b); err != nil {
 		return fail(err)
 	}
@@ -25,7 +25,7 @@ func BeaconFuzzBlock(b []byte) ([]byte, bool) {
 	if err != nil {
 		return fail(err)
 	}
-	post, err := state.ProcessBlock(context.Background(), st, &ethpb.SignedBeaconBlock{Block: input.Block})
+	post, err := blocks.ProcessAttesterSlashings(context.Background(), st, &ethpb.BeaconBlockBody{AttesterSlashings: []*ethpb.AttesterSlashing{input.AttesterSlashing}})
 	if err != nil {
 		return fail(err)
 	}

@@ -1,17 +1,14 @@
 package fuzz
 
 import (
-	"context"
-
-	ethpb "github.com/prysmaticlabs/ethereumapis/eth/v1alpha1"
-	"github.com/prysmaticlabs/prysm/beacon-chain/core/state"
+	"github.com/prysmaticlabs/prysm/beacon-chain/core/blocks"
 	stateTrie "github.com/prysmaticlabs/prysm/beacon-chain/state"
 	prylabs_testing "github.com/prysmaticlabs/prysm/fuzz/testing"
 	"github.com/prysmaticlabs/prysm/shared/params"
 )
 
-// BeaconFuzzBlock using the corpora from sigp/beacon-fuzz.
-func BeaconFuzzBlock(b []byte) ([]byte, bool) {
+// BeaconFuzzBlockHeader using the corpora from sigp/beacon-fuzz.
+func BeaconFuzzBlockHeader(b []byte) ([]byte, bool) {
 	params.UseMainnetConfig()
 	input := &InputBlockHeader{}
 	if err := input.UnmarshalSSZ(b); err != nil {
@@ -25,7 +22,7 @@ func BeaconFuzzBlock(b []byte) ([]byte, bool) {
 	if err != nil {
 		return fail(err)
 	}
-	post, err := state.ProcessBlock(context.Background(), st, &ethpb.SignedBeaconBlock{Block: input.Block})
+	post, err := blocks.ProcessBlockHeaderNoVerify(st, input.Block)
 	if err != nil {
 		return fail(err)
 	}
