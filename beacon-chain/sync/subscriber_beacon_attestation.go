@@ -24,7 +24,7 @@ func (s *Service) committeeIndexBeaconAttestationSubscriber(ctx context.Context,
 	if a.Data == nil {
 		return errors.New("nil attestation")
 	}
-	s.setSeenCommitteeIndicesSlot(a.Data.Slot, a.Data.CommitteeIndex, a.AggregationBits)
+	s.setSeenCommitteeIndicesEpoch(a.Data.Target.Epoch, a.Data.CommitteeIndex, a.AggregationBits)
 
 	exists, err := s.attPool.HasAggregatedAttestation(a)
 	if err != nil {
@@ -44,10 +44,6 @@ func (s *Service) committeeIndexBeaconAttestationSubscriber(ctx context.Context,
 	})
 
 	return s.attPool.SaveUnaggregatedAttestation(a)
-}
-
-func (s *Service) subnetCount() int {
-	return int(params.BeaconNetworkConfig().AttestationSubnetCount)
 }
 
 func (s *Service) persistentSubnetIndices() []uint64 {

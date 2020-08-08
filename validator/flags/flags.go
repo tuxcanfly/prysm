@@ -9,8 +9,18 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
+
+const (
+	// WalletDefaultDirName for accounts-v2.
+	WalletDefaultDirName = "prysm-wallet-v2"
+	// PasswordsDefaultDirName where account-v2 passwords are stored.
+	PasswordsDefaultDirName = "prysm-wallet-v2-passwords"
+)
+
+var log = logrus.WithField("prefix", "flags")
 
 var (
 	// DisableAccountMetricsFlag defines the graffiti value included in proposed blocks, default false.
@@ -124,19 +134,17 @@ var (
 	WalletDirFlag = &cli.StringFlag{
 		Name:  "wallet-dir",
 		Usage: "Path to a wallet directory on-disk for Prysm validator accounts",
-		Value: DefaultValidatorDir(),
+		Value: filepath.Join(DefaultValidatorDir(), WalletDefaultDirName),
 	}
-	// WalletPasswordsDirFlag defines the path for a passwords directory for
-	// Prysm accounts-v2.
-	WalletPasswordsDirFlag = &cli.StringFlag{
-		Name:  "passwords-dir",
-		Usage: "Path to a directory on-disk where account passwords are stored",
-		Value: DefaultValidatorDir(),
+	// AccountPasswordFileFlag is path to a file containing a password for a new validator account.
+	AccountPasswordFileFlag = &cli.StringFlag{
+		Name:  "account-password-file",
+		Usage: "Path to a plain-text, .txt file containing a password for a new validator account",
 	}
-	// PasswordFileFlag is used to enter a file to get a password for new account creation, non-interactively.
-	PasswordFileFlag = &cli.StringFlag{
-		Name:  "password-file",
-		Usage: "Path to a file containing a password to interact with wallets/accounts in a non-interactive way",
+	// WalletPasswordFileFlag is the path to a file containing your wallet password.
+	WalletPasswordFileFlag = &cli.StringFlag{
+		Name:  "wallet-password-file",
+		Usage: "Path to a plain-text, .txt file containing your wallet password",
 	}
 	// MnemonicFileFlag is used to enter a file to mnemonic phrase for new wallet creation, non-interactively.
 	MnemonicFileFlag = &cli.StringFlag{
@@ -159,11 +167,22 @@ var (
 		Name:  "accounts",
 		Usage: "List of account names to export, or \"all\" to backup all accounts",
 	}
+	// NumAccountsFlag defines the amount of accounts to generate for derived wallets.
+	NumAccountsFlag = &cli.Int64Flag{
+		Name:  "num-accounts",
+		Usage: "Number of accounts to generate for derived wallets",
+		Value: 1,
+	}
 	// BackupDirFlag defines the path for the zip backup of the wallet will be created.
 	BackupDirFlag = &cli.StringFlag{
 		Name:  "backup-dir",
 		Usage: "Path to a directory where accounts will be exported into a zip file",
 		Value: DefaultValidatorDir(),
+	}
+	// KeysDirFlag defines the path for a directory where keystores to be imported at stored.
+	KeysDirFlag = &cli.StringFlag{
+		Name:  "keys-dir",
+		Usage: "Path to a directory where keystores to be imported are stored",
 	}
 	// GrpcRemoteAddressFlag defines the host:port address for a remote keymanager to connect to.
 	GrpcRemoteAddressFlag = &cli.StringFlag{
@@ -199,6 +218,32 @@ var (
 		Value: "",
 	}
 )
+
+// Deprecated flags list.
+const deprecatedUsage = "DEPRECATED. DO NOT USE."
+
+var (
+	// DeprecatedPasswordsDirFlag is a deprecated flag.
+	DeprecatedPasswordsDirFlag = &cli.StringFlag{
+		Name:   "passwords-dir",
+		Usage:  deprecatedUsage,
+		Hidden: true,
+	}
+)
+
+// DeprecatedFlags is a slice holding all of the validator client's deprecated flags.
+var DeprecatedFlags = []cli.Flag{
+	DeprecatedPasswordsDirFlag,
+}
+
+// ComplainOnDeprecatedFlags logs out a error log if a deprecated flag is used, letting the user know it will be removed soon.
+func ComplainOnDeprecatedFlags(ctx *cli.Context) {
+	for _, f := range DeprecatedFlags {
+		if ctx.IsSet(f.Names()[0]) {
+			log.Errorf("%s is deprecated and has no effect. Do not use this flag, it will be deleted soon.", f.Names()[0])
+		}
+	}
+}
 
 // DefaultValidatorDir returns OS-specific default validator directory.
 func DefaultValidatorDir() string {

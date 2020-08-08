@@ -1,12 +1,14 @@
 package v2
 
 import (
-	"archive/zip"
 	"context"
+	"encoding/json"
 	"fmt"
-	"io"
-	"os"
+	"io/ioutil"
 	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/logrusorgru/aurora"
@@ -17,151 +19,159 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var derivationPathRegex = regexp.MustCompile("m_12381_3600_([0-9]+)_([0-9]+)_([0-9]+)")
+
+// byDerivationPath implements sort.Interface based on a
+// derivation path present in a keystore filename, if any. This
+// will allow us to sort filenames such as keystore-m_12381_3600_1_0_0.json
+// in a directory and import them nicely in order of the derivation path.
+type byDerivationPath []string
+
+func (fileNames byDerivationPath) Len() int { return len(fileNames) }
+func (fileNames byDerivationPath) Less(i, j int) bool {
+	// We check if file name at index i has a derivation path
+	// in the filename. If it does not, then it is not less than j, and
+	// we should swap it towards the end of the sorted list.
+	if !derivationPathRegex.MatchString(fileNames[i]) {
+		return false
+	}
+	derivationPathA := derivationPathRegex.FindString(fileNames[i])
+	derivationPathB := derivationPathRegex.FindString(fileNames[j])
+	if derivationPathA == "" {
+		return false
+	}
+	if derivationPathB == "" {
+		return true
+	}
+	a, err := strconv.Atoi(accountIndexFromFileName(derivationPathA))
+	if err != nil {
+		return false
+	}
+	b, err := strconv.Atoi(accountIndexFromFileName(derivationPathB))
+	if err != nil {
+		return false
+	}
+	return a < b
+}
+
+func (fileNames byDerivationPath) Swap(i, j int) {
+	fileNames[i], fileNames[j] = fileNames[j], fileNames[i]
+}
+
 // ImportAccount uses the archived account made from ExportAccount to import an account and
 // asks the users for account passwords.
 func ImportAccount(cliCtx *cli.Context) error {
-	walletDir, err := inputDirectory(cliCtx, walletDirPromptText, flags.WalletDirFlag)
-	if err != nil && !errors.Is(err, ErrNoWalletFound) {
-		return errors.Wrap(err, "could not parse wallet directory")
+	ctx := context.Background()
+	wallet, err := createOrOpenWallet(cliCtx, func(cliCtx *cli.Context) (*Wallet, error) {
+		w, err := NewWallet(cliCtx, v2keymanager.Direct)
+		if err != nil && !errors.Is(err, ErrWalletExists) {
+			return nil, errors.Wrap(err, "could not create new wallet")
+		}
+		if err = createDirectKeymanagerWallet(cliCtx, w); err != nil {
+			return nil, errors.Wrap(err, "could not initialize wallet")
+		}
+		log.WithField("wallet-path", w.walletDir).Info(
+			"Successfully created new wallet",
+		)
+		return w, err
+	})
+	if err != nil {
+		return errors.Wrap(err, "could not initialize wallet")
 	}
-	passwordsDir, err := inputDirectory(cliCtx, passwordsDirPromptText, flags.WalletPasswordsDirFlag)
+	if wallet.KeymanagerKind() != v2keymanager.Direct {
+		return errors.New(
+			"only non-HD wallets can import accounts, try creating a new wallet with wallet-v2 create",
+		)
+	}
+	cfg, err := wallet.ReadKeymanagerConfigFromDisk(ctx)
 	if err != nil {
 		return err
 	}
-	backupDir, err := inputDirectory(cliCtx, importDirPromptText, flags.BackupDirFlag)
-	if err != nil {
-		return errors.Wrap(err, "could not parse output directory")
-	}
-
-	accountsPath := filepath.Join(walletDir, v2keymanager.Direct.String())
-	if err := os.MkdirAll(accountsPath, DirectoryPermissions); err != nil {
-		return errors.Wrap(err, "could not create wallet directory")
-	}
-	if err := os.MkdirAll(passwordsDir, DirectoryPermissions); err != nil {
-		return errors.Wrap(err, "could not create passwords directory")
-	}
-	accountsImported, err := unzipArchiveToTarget(backupDir, filepath.Dir(walletDir))
-	if err != nil {
-		return errors.Wrap(err, "could not unzip archive")
-	}
-
-	wallet := &Wallet{
-		accountsPath:   accountsPath,
-		passwordsDir:   passwordsDir,
-		keymanagerKind: v2keymanager.Direct,
-	}
-
-	au := aurora.NewAurora(true)
-	var loggedAccounts []string
-	for _, accountName := range accountsImported {
-		loggedAccounts = append(loggedAccounts, fmt.Sprintf("%s", au.BrightGreen(accountName).Bold()))
-	}
-	fmt.Printf("Importing accounts: %s\n", strings.Join(loggedAccounts, ", "))
-
-	for _, accountName := range accountsImported {
-		if err := wallet.enterPasswordForAccount(cliCtx, accountName); err != nil {
-			return errors.Wrap(err, "could not set account password")
-		}
-	}
-	keymanager, err := wallet.InitializeKeymanager(context.Background(), true /* skip mnemonic confirm */)
-	if err != nil {
-		return errors.Wrap(err, "could not initialize keymanager")
-	}
-	km, ok := keymanager.(*direct.Keymanager)
-	if !ok {
-		return errors.New("can only export accounts for a non-HD wallet")
-	}
-	if err := logAccountsImported(wallet, km, accountsImported); err != nil {
-		return errors.Wrap(err, "could not log accounts imported")
-	}
-
-	return nil
-}
-
-func unzipArchiveToTarget(archiveDir string, target string) ([]string, error) {
-	archiveFile := filepath.Join(archiveDir, archiveFilename)
-	reader, err := zip.OpenReader(archiveFile)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not open reader for archive")
-	}
-
-	perms := os.FileMode(0700)
-	if err := os.MkdirAll(target, perms); err != nil {
-		return nil, errors.Wrap(err, "could not parent path for folder")
-	}
-
-	var accounts []string
-	for _, file := range reader.File {
-		path := filepath.Join(target, file.Name)
-		parentFolder := filepath.Dir(path)
-		if file.FileInfo().IsDir() {
-			accounts = append(accounts, file.FileInfo().Name())
-			if err := os.MkdirAll(path, perms); err != nil {
-				return nil, errors.Wrap(err, "could not make path for file")
-			}
-			continue
-		} else {
-			if err := os.MkdirAll(parentFolder, perms); err != nil {
-				return nil, errors.Wrap(err, "could not make path for file")
-			}
-		}
-
-		if err := copyFileFromZipToPath(file, path); err != nil {
-			return nil, err
-		}
-	}
-	return accounts, nil
-}
-
-func copyFileFromZipToPath(file *zip.File, path string) error {
-	fileReader, err := file.Open()
+	directCfg, err := direct.UnmarshalConfigFile(cfg)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := fileReader.Close(); err != nil {
-			log.WithError(err).Error("Could not close file")
-		}
-	}()
-
-	targetFile, err := os.Create(path)
+	km, err := direct.NewKeymanager(ctx, wallet, directCfg)
 	if err != nil {
-		return errors.Wrap(err, "could not open file")
+		return err
 	}
-	defer func() {
-		if err := targetFile.Close(); err != nil {
-			log.WithError(err).Error("Could not close target")
-		}
-	}()
-
-	if _, err := io.Copy(targetFile, fileReader); err != nil {
-		return errors.Wrap(err, "could not copy file")
+	keysDir, err := inputDirectory(cliCtx, importKeysDirPromptText, flags.KeysDirFlag)
+	if err != nil {
+		return errors.Wrap(err, "could not parse keys directory")
 	}
-	return nil
-}
-
-func logAccountsImported(wallet *Wallet, keymanager *direct.Keymanager, accountNames []string) error {
-	au := aurora.NewAurora(true)
-
-	numAccounts := au.BrightYellow(len(accountNames))
-	fmt.Println("")
-	if len(accountNames) == 1 {
-		fmt.Printf("Imported %d validator account\n", numAccounts)
-	} else {
-		fmt.Printf("Imported %d validator accounts\n", numAccounts)
+	if err := wallet.SaveWallet(); err != nil {
+		return errors.Wrap(err, "could not save wallet")
 	}
-	for _, accountName := range accountNames {
-		fmt.Println("")
-		fmt.Printf("%s\n", au.BrightGreen(accountName).Bold())
+	isDir, err := hasDir(keysDir)
+	if err != nil {
+		return errors.Wrap(err, "could not determine if path is a directory")
+	}
 
-		publicKey, err := keymanager.PublicKeyForAccount(accountName)
+	keystoresImported := make([]*v2keymanager.Keystore, 0)
+	// Consider that the keysDir might be a path to a specific file and handle accordingly.
+	if isDir {
+		files, err := ioutil.ReadDir(keysDir)
 		if err != nil {
-			return errors.Wrap(err, "could not get public key")
+			return errors.Wrap(err, "could not read dir")
 		}
-		fmt.Printf("%s %#x\n", au.BrightMagenta("[public key]").Bold(), publicKey)
-
-		dirPath := au.BrightCyan("(wallet dir)")
-		fmt.Printf("%s %s\n", dirPath, filepath.Join(wallet.AccountsDir(), accountName))
+		if len(files) == 0 {
+			return fmt.Errorf("directory %s has no files, cannot import from it", keysDir)
+		}
+		keystoreFileNames := make([]string, 0)
+		for i := 0; i < len(files); i++ {
+			if files[i].IsDir() {
+				continue
+			}
+			if !strings.HasPrefix(files[i].Name(), "keystore") {
+				continue
+			}
+			keystoreFileNames = append(keystoreFileNames, files[i].Name())
+		}
+		// Sort the imported keystores by derivation path if they
+		// specify this value in their filename.
+		sort.Sort(byDerivationPath(keystoreFileNames))
+		for _, name := range keystoreFileNames {
+			keystore, err := wallet.readKeystoreFile(ctx, filepath.Join(keysDir, name))
+			if err != nil {
+				return errors.Wrapf(err, "could not import keystore at path: %s", name)
+			}
+			keystoresImported = append(keystoresImported, keystore)
+		}
+	} else {
+		keystore, err := wallet.readKeystoreFile(ctx, keysDir)
+		if err != nil {
+			return errors.Wrap(err, "could not import keystore")
+		}
+		keystoresImported = append(keystoresImported, keystore)
 	}
+
+	au := aurora.NewAurora(true)
+	if err := km.ImportKeystores(cliCtx, keystoresImported); err != nil {
+		return errors.Wrap(err, "could not import all keystores")
+	}
+	fmt.Printf(
+		"Successfully imported %s accounts, view all of them by running accounts-v2 list\n",
+		au.BrightMagenta(strconv.Itoa(len(keystoresImported))),
+	)
 	return nil
+}
+
+func (w *Wallet) readKeystoreFile(ctx context.Context, keystoreFilePath string) (*v2keymanager.Keystore, error) {
+	keystoreBytes, err := ioutil.ReadFile(keystoreFilePath)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not read keystore file")
+	}
+	keystoreFile := &v2keymanager.Keystore{}
+	if err := json.Unmarshal(keystoreBytes, keystoreFile); err != nil {
+		return nil, errors.Wrap(err, "could not decode keystore json")
+	}
+	return keystoreFile, nil
+}
+
+// Extracts the account index, j, from a derivation path in a file name
+// with the format m_12381_3600_j_0_0.
+func accountIndexFromFileName(derivationPath string) string {
+	derivationPath = derivationPath[13:]
+	accIndexEnd := strings.Index(derivationPath, "_")
+	return derivationPath[:accIndexEnd]
 }

@@ -2,24 +2,17 @@ package v2
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/dustin/go-humanize"
 	validatorpb "github.com/prysmaticlabs/prysm/proto/validator/accounts/v2"
 	"github.com/prysmaticlabs/prysm/shared/bls"
 	"github.com/prysmaticlabs/prysm/shared/bytesutil"
 	"github.com/prysmaticlabs/prysm/shared/petnames"
-	"github.com/prysmaticlabs/prysm/shared/testutil"
-	"github.com/prysmaticlabs/prysm/shared/testutil/assert"
 	"github.com/prysmaticlabs/prysm/shared/testutil/require"
 	v2keymanager "github.com/prysmaticlabs/prysm/validator/keymanager/v2"
 	"github.com/prysmaticlabs/prysm/validator/keymanager/v2/derived"
@@ -40,11 +33,12 @@ func (m *mockKeymanager) Sign(context.Context, *validatorpb.SignRequest) (bls.Si
 }
 
 func TestListAccounts_DirectKeymanager(t *testing.T) {
-	walletDir, passwordsDir := setupWalletAndPasswordsDir(t)
+	walletDir, passwordsDir, walletPasswordFile := setupWalletAndPasswordsDir(t)
 	cliCtx := setupWalletCtx(t, &testWalletConfig{
-		walletDir:      walletDir,
-		passwordsDir:   passwordsDir,
-		keymanagerKind: v2keymanager.Direct,
+		walletDir:          walletDir,
+		passwordsDir:       passwordsDir,
+		keymanagerKind:     v2keymanager.Direct,
+		walletPasswordFile: walletPasswordFile,
 	})
 	wallet, err := NewWallet(cliCtx, v2keymanager.Direct)
 	require.NoError(t, err)
@@ -58,17 +52,9 @@ func TestListAccounts_DirectKeymanager(t *testing.T) {
 	require.NoError(t, err)
 
 	numAccounts := 5
-	depositDataForAccounts := make([][]byte, numAccounts)
-	accountCreationTimestamps := make([][]byte, numAccounts)
 	for i := 0; i < numAccounts; i++ {
-		accountName, err := keymanager.CreateAccount(ctx, "hello world")
+		_, err := keymanager.CreateAccount(ctx)
 		require.NoError(t, err)
-		depositData, err := wallet.ReadFileAtPath(ctx, accountName, direct.DepositTransactionFileName)
-		require.NoError(t, err)
-		depositDataForAccounts[i] = depositData
-		unixTimestamp, err := wallet.ReadFileAtPath(ctx, accountName, direct.TimestampFileName)
-		require.NoError(t, err)
-		accountCreationTimestamps[i] = unixTimestamp
 	}
 	rescueStdout := os.Stdout
 	r, w, err := os.Pipe()
@@ -85,13 +71,8 @@ func TestListAccounts_DirectKeymanager(t *testing.T) {
 
 	// Assert the keymanager kind is printed to stdout.
 	stringOutput := string(out)
-	if !strings.Contains(stringOutput, wallet.KeymanagerKind().String()) {
-		t.Error("Did not find Keymanager kind in output")
-	}
-
-	// Assert the wallet and passwords paths are in stdout.
-	if !strings.Contains(stringOutput, wallet.accountsPath) {
-		t.Errorf("Did not find accounts path %s in output", wallet.accountsPath)
+	if !strings.Contains(stringOutput, "non-HD") {
+		t.Error("Did not find keymanager kind in output")
 	}
 
 	accountNames, err := keymanager.ValidatingAccountNames()
@@ -106,46 +87,21 @@ func TestListAccounts_DirectKeymanager(t *testing.T) {
 			t.Errorf("Did not find account %s in output", accountName)
 		}
 		key := pubKeys[i]
-		depositData := depositDataForAccounts[i]
 
 		// Assert every public key is printed to stdout.
 		if !strings.Contains(stringOutput, fmt.Sprintf("%#x", key)) {
 			t.Errorf("Did not find pubkey %#x in output", key)
 		}
-
-		// Assert the deposit data for the account is printed to stdout.
-		if !strings.Contains(stringOutput, fmt.Sprintf("%#x", depositData)) {
-			t.Errorf("Did not find deposit data %#x in output", depositData)
-		}
-
-		// Assert the account creation time is displayed
-		unixTimestampStr, err := strconv.ParseInt(string(accountCreationTimestamps[i]), 10, 64)
-		require.NoError(t, err)
-		unixTimestamp := time.Unix(unixTimestampStr, 0)
-		assert.Equal(t, strings.Contains(stringOutput, humanize.Time(unixTimestamp)), true)
 	}
 }
 
 func TestListAccounts_DerivedKeymanager(t *testing.T) {
-	walletDir, passwordsDir := setupWalletAndPasswordsDir(t)
-	randPath, err := rand.Int(rand.Reader, big.NewInt(1000000))
-	require.NoError(t, err)
-	passwordFileDir := filepath.Join(testutil.TempDir(), fmt.Sprintf("/%d", randPath), "passwords-file")
-	require.NoError(t, os.MkdirAll(passwordFileDir, os.ModePerm))
-	t.Cleanup(func() {
-		require.NoError(t, os.RemoveAll(passwordFileDir), "Failed to remove directory")
-	})
-	passwordFilePath := filepath.Join(passwordFileDir, passwordFileName)
-	password := "PasszW0rdzzz2%"
-	require.NoError(
-		t,
-		ioutil.WriteFile(passwordFilePath, []byte(password), os.ModePerm),
-	)
+	walletDir, passwordsDir, passwordFilePath := setupWalletAndPasswordsDir(t)
 	cliCtx := setupWalletCtx(t, &testWalletConfig{
-		walletDir:      walletDir,
-		passwordsDir:   passwordsDir,
-		keymanagerKind: v2keymanager.Derived,
-		passwordFile:   passwordFilePath,
+		walletDir:          walletDir,
+		passwordsDir:       passwordsDir,
+		keymanagerKind:     v2keymanager.Derived,
+		walletPasswordFile: passwordFilePath,
 	})
 	wallet, err := NewWallet(cliCtx, v2keymanager.Derived)
 	require.NoError(t, err)
@@ -171,17 +127,12 @@ func TestListAccounts_DerivedKeymanager(t *testing.T) {
 
 	numAccounts := 5
 	depositDataForAccounts := make([][]byte, numAccounts)
-	accountCreationTimestamps := make([][]byte, numAccounts)
 	for i := 0; i < numAccounts; i++ {
-		_, err := keymanager.CreateAccount(ctx)
+		_, err := keymanager.CreateAccount(ctx, false /*logAccountInfo*/)
 		require.NoError(t, err)
-		withdrawalKeyPath := fmt.Sprintf(derived.WithdrawalKeyDerivationPathTemplate, i)
-		depositData, err := wallet.ReadFileAtPath(ctx, withdrawalKeyPath, direct.DepositTransactionFileName)
+		enc, err := keymanager.DepositDataForAccount(uint64(i))
 		require.NoError(t, err)
-		depositDataForAccounts[i] = depositData
-		unixTimestamp, err := wallet.ReadFileAtPath(ctx, withdrawalKeyPath, direct.TimestampFileName)
-		require.NoError(t, err)
-		accountCreationTimestamps[i] = unixTimestamp
+		depositDataForAccounts[i] = enc
 	}
 
 	rescueStdout := os.Stdout
@@ -201,11 +152,6 @@ func TestListAccounts_DerivedKeymanager(t *testing.T) {
 	stringOutput := string(out)
 	if !strings.Contains(stringOutput, wallet.KeymanagerKind().String()) {
 		t.Error("Did not find Keymanager kind in output")
-	}
-
-	// Assert the wallet accounts path is in stdout.
-	if !strings.Contains(stringOutput, wallet.accountsPath) {
-		t.Errorf("Did not find accounts path %s in output", wallet.accountsPath)
 	}
 
 	accountNames, err := keymanager.ValidatingAccountNames(ctx)
@@ -231,17 +177,11 @@ func TestListAccounts_DerivedKeymanager(t *testing.T) {
 		if !strings.Contains(stringOutput, fmt.Sprintf("%#x", depositData)) {
 			t.Errorf("Did not find deposit data %#x in output", depositData)
 		}
-
-		// Assert the account creation time is displayed
-		unixTimestampStr, err := strconv.ParseInt(string(accountCreationTimestamps[i]), 10, 64)
-		require.NoError(t, err)
-		unixTimestamp := time.Unix(unixTimestampStr, 0)
-		assert.Equal(t, strings.Contains(stringOutput, humanize.Time(unixTimestamp)), true)
 	}
 }
 
 func TestListAccounts_RemoteKeymanager(t *testing.T) {
-	walletDir, _ := setupWalletAndPasswordsDir(t)
+	walletDir, _, _ := setupWalletAndPasswordsDir(t)
 	cliCtx := setupWalletCtx(t, &testWalletConfig{
 		walletDir:      walletDir,
 		keymanagerKind: v2keymanager.Remote,

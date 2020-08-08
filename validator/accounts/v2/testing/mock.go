@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"strings"
 	"sync"
 )
 
@@ -17,6 +18,7 @@ type Wallet struct {
 	EncryptedSeedFile []byte
 	AccountPasswords  map[string]string
 	UnlockAccounts    bool
+	WalletPassword    string
 	lock              sync.RWMutex
 }
 
@@ -36,29 +38,14 @@ func (m *Wallet) AccountsDir() string {
 	return m.InnerAccountsDir
 }
 
+// Password --
+func (m *Wallet) Password() string {
+	return m.WalletPassword
+}
+
 // ListDirs --
 func (m *Wallet) ListDirs() ([]string, error) {
 	return m.Directories, nil
-}
-
-// WritePasswordToDisk --
-func (m *Wallet) WritePasswordToDisk(ctx context.Context, passwordFileName string, password string) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	m.AccountPasswords[passwordFileName] = password
-	return nil
-}
-
-// ReadPasswordFromDisk --
-func (m *Wallet) ReadPasswordFromDisk(ctx context.Context, passwordFileName string) (string, error) {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-	for name, password := range m.AccountPasswords {
-		if name == passwordFileName {
-			return password, nil
-		}
-	}
-	return "", errors.New("account not found")
 }
 
 // WriteFileAtPath --
@@ -77,11 +64,11 @@ func (m *Wallet) ReadFileAtPath(ctx context.Context, pathName string, fileName s
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 	for f, v := range m.Files[pathName] {
-		if f == fileName {
+		if strings.Contains(fileName, f) {
 			return v, nil
 		}
 	}
-	return nil, errors.New("file not found")
+	return nil, errors.New("no files found")
 }
 
 // ReadEncryptedSeedFromDisk --
