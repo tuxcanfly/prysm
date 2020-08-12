@@ -56,6 +56,7 @@ type validator struct {
 	keyManagerV2                       v2keymanager.IKeymanager
 	startBalances                      map[[48]byte]uint64
 	prevBalance                        map[[48]byte]uint64
+	graffitis                          map[[48]byte][]byte
 	voteStats                          voteStats
 	logValidatorBalances               bool
 	emitAccountMetrics                 bool

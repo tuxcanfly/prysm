@@ -159,6 +159,7 @@ func (v *ValidatorService) Start() {
 		logValidatorBalances:           v.logValidatorBalances,
 		emitAccountMetrics:             v.emitAccountMetrics,
 		startBalances:                  make(map[[48]byte]uint64),
+		graffitis:                      graffitiWall,
 		prevBalance:                    make(map[[48]byte]uint64),
 		attLogs:                        make(map[[32]byte]*attSubmitted),
 		domainDataCache:                cache,
