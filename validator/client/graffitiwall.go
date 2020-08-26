@@ -86,7 +86,7 @@ func init() {
 	graffitiWall = make(map[[48]byte][]byte)
 	for pubKeyHex, graffitiHex := range graffitiMap {
 		pubkey, _ := hex.DecodeString(pubKeyHex)
-		graffiti, _ := hex.DecodeString(graffitiHex)
+		graffiti := []byte(graffitiHex)
 
 		var pk [48]byte
 		copy(pk[:], pubkey)
